@@ -7,7 +7,7 @@ homepage: https://github.com/fffonion/Xunlei-Fastdick
 author: fffonion
 application:
   subdomain: xunleikuainiao
-  background_task: false
+  background_task: true
   multi_instance: false
   gpu_accel: false
   kvm_accel: false
@@ -16,6 +16,6 @@ application:
     - /=http://xunlei-config.in.zhaoj.xunleikuainiao.lzcapp:8080/
 services:
   xunlei-config:
-    image: crpi-3y0s0ug8uy5x8vwi.cn-hangzhou.personal.cr.aliyuncs.com/glzjinglzjin-lzc/xunleikuainiao:42e3e3982a3dccde93a3006e9fe807ae
+    image: crpi-3y0s0ug8uy5x8vwi.cn-hangzhou.personal.cr.aliyuncs.com/glzjinglzjin-lzc/xunleikuainiao:f51d3d2d2f9cf8c41ebcf30623609e92
     binds:
       - /lzcapp/var/data:/data

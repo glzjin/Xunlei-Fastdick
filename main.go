@@ -29,8 +29,8 @@ var (
 	currentProcess *exec.Cmd
 	processLock    sync.Mutex
 	goLogFile      *os.File // Go程序的日志文件
-	pythonLogFile  *os.File // Python进程的输出日志文件
-	goLogWriter    io.Writer
+	// pythonLogFile  *os.File // Python进程的输出日志文件
+	goLogWriter io.Writer
 )
 
 // 初始化日志
@@ -43,12 +43,12 @@ func initLog() error {
 	}
 	goLogWriter = io.MultiWriter(goLogFile, os.Stdout)
 
-	// 初始化Python进程的日志文件
-	pythonLogFile, err = os.OpenFile("/data/swjsq2.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		goLogFile.Close()
-		return fmt.Errorf("打开Python日志文件失败: %v", err)
-	}
+	// // 初始化Python进程的日志文件
+	// pythonLogFile, err = os.OpenFile("/data/swjsq2.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	// if err != nil {
+	// 	goLogFile.Close()
+	// 	return fmt.Errorf("打开Python日志文件失败: %v", err)
+	// }
 
 	// 设置标准日志输出
 	log.SetOutput(goLogWriter)
@@ -81,7 +81,6 @@ func startPythonProcess(uid, passwd string) error {
 	sessionFile := "/app/.swjsq.session"
 	if err := os.Remove(sessionFile); err != nil && !os.IsNotExist(err) {
 		writeLog("删除会话文件失败: %v", err)
-		// 继续执行，不要因为删除失败而中断
 	}
 
 	writeLog("正在启动Python进程，UID=%s", uid)
@@ -92,14 +91,10 @@ func startPythonProcess(uid, passwd string) error {
 		fmt.Sprintf("XUNLEI_PASSWD=%s", passwd),
 	)
 
-	// 创建新进程
-	cmd := exec.Command("python", "/app/swjsq.py")
+	// 创建新进程并设置工作目录
+	cmd := exec.Command("python", "/app/swjsq.py", "&")
+	cmd.Dir = "/app"
 	cmd.Env = env
-
-	// 创建多重写入器，同时写入Python日志文件和标准输出
-	pythonWriter := io.MultiWriter(pythonLogFile, os.Stdout)
-	cmd.Stdout = pythonWriter
-	cmd.Stderr = pythonWriter
 
 	// 启动进程
 	if err := cmd.Start(); err != nil {
@@ -132,7 +127,7 @@ const htmlTemplate = `
         input[type="text"], input[type="password"] { width: 100%; padding: 8px; }
         button { padding: 10px 20px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }
         button:hover { background-color: #45a049; }
-        #log-container { 
+        .log-container { 
             margin-top: 20px;
             padding: 10px;
             background: #f5f5f5;
@@ -142,6 +137,13 @@ const htmlTemplate = `
             overflow-y: auto;
             font-family: monospace;
             white-space: pre-wrap;
+        }
+        .log-section {
+            margin-bottom: 30px;
+        }
+        .log-title {
+            margin-bottom: 10px;
+            font-weight: bold;
         }
         .refresh-btn {
             margin-top: 10px;
@@ -154,10 +156,13 @@ const htmlTemplate = `
     <script>
         function refreshLogs() {
             fetch('/logs')
-                .then(response => response.text())
+                .then(response => response.json())
                 .then(data => {
-                    document.getElementById('log-container').textContent = data;
-                    document.getElementById('log-container').scrollTop = document.getElementById('log-container').scrollHeight;
+                    document.getElementById('go-log-container').textContent = data.goLogs;
+                    document.getElementById('python-log-container').textContent = data.pythonLogs;
+                    // 自动滚动到底部
+                    document.getElementById('go-log-container').scrollTop = document.getElementById('go-log-container').scrollHeight;
+                    document.getElementById('python-log-container').scrollTop = document.getElementById('python-log-container').scrollHeight;
                 });
         }
 
@@ -181,9 +186,16 @@ const htmlTemplate = `
         <button type="submit">保存配置</button>
     </form>
 
-    <h3>运行日志</h3>
-    <button onclick="refreshLogs()" class="refresh-btn">刷新日志</button>
-    <div id="log-container"></div>
+    <div class="log-section">
+        <h3>Go程序日志</h3>
+        <button onclick="refreshLogs()" class="refresh-btn">刷新日志</button>
+        <div id="go-log-container" class="log-container"></div>
+    </div>
+
+    <div class="log-section">
+        <h3>Python程序日志</h3>
+        <div id="python-log-container" class="log-container"></div>
+    </div>
 </body>
 </html>
 `
@@ -269,43 +281,47 @@ func handleLogs(w http.ResponseWriter, r *http.Request) {
 	goLogs, err1 := os.ReadFile("/data/swjsq.log")
 	pythonLogs, err2 := os.ReadFile("/data/swjsq2.log")
 
-	var allLogs []string
+	// 准备JSON响应
+	response := struct {
+		GoLogs     string `json:"goLogs"`
+		PythonLogs string `json:"pythonLogs"`
+	}{
+		GoLogs:     "",
+		PythonLogs: "",
+	}
 
 	// 处理Go程序日志
 	if err1 == nil {
-		allLogs = append(allLogs, strings.Split(string(goLogs), "\n")...)
-	}
-
-	// 处理Python进程日志
-	if err2 == nil {
-		allLogs = append(allLogs, strings.Split(string(pythonLogs), "\n")...)
-	}
-
-	// 如果两个日志文件都读取失败
-	if err1 != nil && err2 != nil {
-		if os.IsNotExist(err1) && os.IsNotExist(err2) {
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			return
+		lines := strings.Split(string(goLogs), "\n")
+		if len(lines) > 1000 {
+			lines = lines[len(lines)-1000:]
 		}
-		http.Error(w, "无法读取日志文件", http.StatusInternalServerError)
+		response.GoLogs = strings.Join(lines, "\n")
+	}
+
+	// 处理Python程序日志
+	if err2 == nil {
+		lines := strings.Split(string(pythonLogs), "\n")
+		if len(lines) > 1000 {
+			lines = lines[len(lines)-1000:]
+		}
+		response.PythonLogs = strings.Join(lines, "\n")
+	}
+
+	// 设置响应头
+	w.Header().Set("Content-Type", "application/json")
+
+	// 返回JSON响应
+	json.NewEncoder(w).Encode(response)
+}
+
+func init() {
+	location, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		log.Printf("Failed to load location: %v", err)
 		return
 	}
-
-	// 过滤空行
-	var filteredLogs []string
-	for _, line := range allLogs {
-		if line != "" {
-			filteredLogs = append(filteredLogs, line)
-		}
-	}
-
-	// 只保留最后1000行
-	if len(filteredLogs) > 1000 {
-		filteredLogs = filteredLogs[len(filteredLogs)-1000:]
-	}
-
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	io.WriteString(w, strings.Join(filteredLogs, "\n"))
+	time.Local = location
 }
 
 func main() {
@@ -314,7 +330,7 @@ func main() {
 		log.Fatalf("初始化日志失败: %v", err)
 	}
 	defer goLogFile.Close()
-	defer pythonLogFile.Close()
+	// defer pythonLogFile.Close()
 
 	writeLog("Web服务器启动")
 

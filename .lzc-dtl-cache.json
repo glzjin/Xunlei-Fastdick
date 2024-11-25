@@ -4,7 +4,9 @@
   "description": "迅雷快鸟客户端，保持加速",
   "homepage": "https://github.com/fffonion/Xunlei-Fastdick",
   "author": "fffonion",
-  "app_features": [],
+  "app_features": [
+    "background_task"
+  ],
   "subdomain": "xunleikuainiao",
   "version": "0.0.1",
   "iconPath": "下载 (8).jpg",
@@ -26,5 +28,6 @@
     "timestamp": "2024-11-24T03:22:55.781Z"
   },
   "xunlei-config_volume_/data_action": "emptyDir",
-  "xunlei-config_volume_/data_location": "app_data"
+  "xunlei-config_volume_/data_location": "app_data",
+  "registryUrl": "crpi-3y0s0ug8uy5x8vwi.cn-hangzhou.personal.cr.aliyuncs.com/glzjinglzjin-lzc"
 }

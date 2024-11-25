@@ -9,6 +9,8 @@ import binascii
 import tarfile
 import atexit
 import socket
+import logging
+from logging.handlers import RotatingFileHandler
 
 origin_getaddrinfo = socket.getaddrinfo
 def getaddrinfo_wrapper(host, port, family=0, socktype=0, proto=0, flags=0):
@@ -19,13 +21,13 @@ try:
     import ssl
     import hashlib
 except ImportError as ex:
-    print("Error: cannot import module ssl or hashlib (%s)." % str(ex))
-    print("If you are using openwrt, run \"opkg install python-openssl\"")
+    logger.error("Error: cannot import module ssl or hashlib (%s)" % str(ex))
+    logger.error("If you are using openwrt, run \"opkg install python-openssl\"")
     os._exit(0)
 try:
     import zlib
 except ImportError as ex:
-    print("Warning: cannot import module zlib (%s)." % str(ex))
+    logger.warning("Warning: cannot import module zlib (%s)" % str(ex))
     # TODO: if there's a python dist that is not bundled with zlib ever exists, disable gzip Accept-Encoding
 
 #xunlei use self-signed certificate; on py2.7.9+
@@ -62,7 +64,7 @@ account_session = '.swjsq.session'
 account_file_plain = 'swjsq.account.txt'
 shell_file = 'swjsq_wget.sh'
 ipk_file = 'swjsq_0.0.1_all.ipk'
-log_file = '/data/swjsq.log'
+log_file = '/data/swjsq2.log'
 
 login_xunlei_intv = 600 # do not login twice in 10min
 
@@ -141,41 +143,38 @@ def api_url(up = False):
 def long2hex(l):
     return hex(l)[2:].upper().rstrip('L')
 
-_real_print = print
-logfd = open(log_file, 'ab')
-
-def print(s, **kwargs):
-    line = "%s %s" % (time.strftime('%X', time.localtime(time.time())), s)
-    if PY3K:
-        logfd.write(line.encode('utf-8'))
-    else:
-        try:
-            logfd.write(line)
-        except UnicodeEncodeError:
-            logfd.write(line.encode('utf-8'))
-    if PY3K:
-        logfd.write(b'\n')
-    else:
-        logfd.write("\n")
-    _real_print(line, **kwargs)
+# 设置日志
+def setup_logging():
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
     
-def uprint(s, fallback = None, end = None):
-    global UNICODE_WARNING_SHOWN
-    while True:
-        try:
-            print(s, end = end)
-        except UnicodeEncodeError:
-            if UNICODE_WARNING_SHOWN:
-                print('Warning: locale of your system may not be utf8 compatible, output will be truncated')
-                UNICODE_WARNING_SHOWN = True
-        else:
-            break
-        try:
-            print(s.encode('utf-8'), end = end)
-        except UnicodeEncodeError:
-            if fallback:
-                print(fallback, end = end)
-        break
+    # 设置日志格式
+    formatter = logging.Formatter('%(asctime)s %(message)s', datefmt='%H:%M:%S')
+    
+    # 添加文件处理器
+    log_file = '/data/swjsq2.log'
+    file_handler = RotatingFileHandler(log_file, maxBytes=1024*1024, backupCount=5)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    
+    # 添加控制台处理器
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    
+    return logger
+
+# 初始化日志
+logger = setup_logging()
+
+# 重定向 print 函数
+def custom_print(*args, **kwargs):
+    message = ' '.join(map(str, args))
+    logger.info(message)
+
+# 替换内置 print 函数
+_real_print = print
+print = custom_print
 
 def http_req(url, headers = {}, body = None, encoding = 'utf-8'):
     req = urllib2.Request(url)
@@ -339,7 +338,7 @@ class fast_d1ck(object):
                     ret[_k1] = json.loads(http_req(url, headers = header_api))
                     break
                 except URLError as ex:
-                    uprint("Warning: error during %sapi connection: %s, use portal: %s" % (_k1, str(ex), api_url))
+                    print("Warning: error during %sapi connection: %s, use portal: %s" % (_k1, str(ex), api_url))
                     if (_k1 == 'down' and api_url == FALLBACK_PORTAL) or (_k1 == 'up' and api_url == FALLBACK_UPPORTAL):
                         print("Error: can't connect to %s api" % _k1)
                         os._exit(5)
@@ -363,7 +362,7 @@ class fast_d1ck(object):
         for _lm in login_methods:
             dt = _lm()
             if dt['errorCode'] != "0" or not self.xl_session or not self.xl_loginkey:
-                uprint('Error: login xunlei failed, %s' % dt['errorDesc'], 'Error: login failed')
+                print('Error: login xunlei failed, %s' % dt['errorDesc'], 'Error: login failed')
                 print(dt)
             else:
                 failed = False
@@ -425,7 +424,7 @@ class fast_d1ck(object):
 
             _ = api_ret[_k1]
             if 'can_upgrade' not in _ or not _['can_upgrade']:
-                uprint('Warning: %s can not upgrade, so sad TAT: %s' % (_name, _['message']), 'Error: %s can not upgrade, so sad TAT' % _name)
+                print('Warning: %s can not upgrade, so sad TAT: %s' % (_name, _['message']))
                 setattr(self, _v, False)
             else:
                 _to_upgrade.append('%s %dM -> %dM' % (
@@ -440,9 +439,7 @@ class fast_d1ck(object):
         
         _avail = api_ret[list(api_ret.keys())[0]]
         
-        uprint('To Upgrade: %s%s %s' % ( _avail['province_name'], _avail['sp_name'], ", ".join(_to_upgrade)),
-                'To Upgrade: %s %s %s' % ( _avail['province'], _avail['sp'], ", ".join(_to_upgrade))
-              )
+        print('To Upgrade: %s%s %s' % ( _avail['province_name'], _avail['sp_name'], ", ".join(_to_upgrade)))
               
         _dial_account = _avail['dial_account']
 
