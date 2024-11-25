@@ -1,0 +1,21 @@
+lzc-sdk-version: "0.1"
+name: 迅雷快鸟
+package: in.zhaoj.xunleikuainiao
+version: 0.0.1
+description: 迅雷快鸟客户端，保持加速
+homepage: https://github.com/fffonion/Xunlei-Fastdick
+author: fffonion
+application:
+  subdomain: xunleikuainiao
+  background_task: false
+  multi_instance: false
+  gpu_accel: false
+  kvm_accel: false
+  usb_accel: false
+  routes:
+    - /=http://xunlei-config.in.zhaoj.xunleikuainiao.lzcapp:8080/
+services:
+  xunlei-config:
+    image: crpi-3y0s0ug8uy5x8vwi.cn-hangzhou.personal.cr.aliyuncs.com/glzjinglzjin-lzc/xunleikuainiao:42e3e3982a3dccde93a3006e9fe807ae
+    binds:
+      - /lzcapp/var/data:/data

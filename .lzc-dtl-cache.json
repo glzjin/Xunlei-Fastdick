@@ -1,0 +1,30 @@
+{
+  "name": "迅雷快鸟",
+  "package": "in.zhaoj.xunleikuainiao",
+  "description": "迅雷快鸟客户端，保持加速",
+  "homepage": "https://github.com/fffonion/Xunlei-Fastdick",
+  "author": "fffonion",
+  "app_features": [],
+  "subdomain": "xunleikuainiao",
+  "version": "0.0.1",
+  "iconPath": "下载 (8).jpg",
+  "composePath": "docker-compose.yml",
+  "unsupported_platforms": [],
+  "lastRouteType": "from_compose",
+  "port_mappings": {
+    "xunlei-config_8080_8080": {
+      "use": true,
+      "type": "http",
+      "path": "/",
+      "targetPath": "/"
+    }
+  },
+  "build_xunlei-config": {
+    "build": true,
+    "pushTarget": "custom",
+    "imageName": "crpi-3y0s0ug8uy5x8vwi.cn-hangzhou.personal.cr.aliyuncs.com/glzjinglzjin-lzc/xunleikuainiao:bd76f85edc07c96efd7b4a795ee92e07",
+    "timestamp": "2024-11-24T03:22:55.781Z"
+  },
+  "xunlei-config_volume_/data_action": "emptyDir",
+  "xunlei-config_volume_/data_location": "app_data"
+}
